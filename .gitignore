@@ -3,7 +3,6 @@
 
 # Access keys (SECURITY: never commit!)
 access_keys.txt
-КЛЮЧИ_ДОСТУПА.txt
 
 # Python
 __pycache__/
