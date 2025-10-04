@@ -6,6 +6,9 @@ import json
 
 logger = logging.getLogger(__name__)
 
+# Импортируем трекер токенов
+from token_tracker import TokenTracker
+
 
 class OpenAIService:
     """Класс для работы с OpenAI API"""
@@ -16,6 +19,8 @@ class OpenAIService:
         self.vision_model = vision_model
         openai.api_key = api_key
         self.client = openai.OpenAI(api_key=api_key)
+        # Добавляем трекер токенов
+        self.token_tracker = TokenTracker()
     
     async def analyze_text_food(self, text: str) -> Dict:
         """
@@ -55,6 +60,9 @@ class OpenAIService:
                 temperature=0.7,
                 response_format={"type": "json_object"}
             )
+            
+            # Отслеживаем использование токенов и стоимость
+            self.token_tracker.track_usage(response)
             
             result = json.loads(response.choices[0].message.content)
             logger.info(f"Анализ текста выполнен: {result.get('product_name', 'unknown')}")
@@ -126,6 +134,9 @@ class OpenAIService:
                 response_format={"type": "json_object"}
             )
             
+            # Отслеживаем использование токенов и стоимость
+            self.token_tracker.track_usage(response)
+            
             result = json.loads(response.choices[0].message.content)
             logger.info(f"Анализ изображения выполнен: {result.get('product_name', 'unknown')}")
             return result
@@ -133,6 +144,14 @@ class OpenAIService:
         except Exception as e:
             logger.error(f"Ошибка при анализе изображения: {e}")
             raise
+    
+    def get_token_stats(self) -> Dict:
+        """Получить статистику использования токенов"""
+        return self.token_tracker.get_stats()
+    
+    def reset_token_stats(self):
+        """Сбросить статистику токенов"""
+        self.token_tracker.reset()
     
     def format_response(self, data: Dict, include_daily_stats: bool = False, 
                        daily_total: float = 0, daily_limit: int = 2000) -> str:

@@ -502,6 +502,34 @@ class CalorieCounterBot:
         await self.db.init_db()
         logger.info("Бот инициализирован и готов к работе")
     
+    async def token_stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик команды /token_stats - показывает статистику использования токенов"""
+        user_id = update.effective_user.id
+        
+        # Проверка доступа
+        access_info = await self.db.check_user_access(user_id)
+        if not access_info.get('has_access') and not access_info.get('key_type'):
+            await update.message.reply_text(
+                "🔒 Для просмотра статистики необходимо активировать ключ доступа.",
+                parse_mode=ParseMode.HTML
+            )
+            return
+        
+        # Получаем статистику токенов
+        stats = self.openai_service.get_token_stats()
+        
+        stats_message = f"""📊 <b>Статистика использования токенов</b>
+
+🔥 <b>Общее количество токенов:</b> {stats['total_tokens_used']:,}
+💰 <b>Общая стоимость:</b> ${stats['total_cost']:.6f}
+📈 <b>Запросов выполнено:</b> {stats['requests_count']}
+📊 <b>Среднее токенов на запрос:</b> {stats['avg_tokens_per_request']:.1f}
+💵 <b>Средняя стоимость запроса:</b> ${stats['avg_cost_per_request']:.6f}
+
+<b>Примечание:</b> Статистика сбрасывается при перезапуске бота."""
+        
+        await update.message.reply_text(stats_message, parse_mode=ParseMode.HTML)
+    
     def run(self):
         """Запуск бота"""
         if not config.TELEGRAM_BOT_TOKEN:
@@ -528,6 +556,7 @@ class CalorieCounterBot:
         application.add_handler(CommandHandler("stats", self.stats_command))
         application.add_handler(CommandHandler("history", self.history_command))
         application.add_handler(CommandHandler("reset", self.reset_command))
+        application.add_handler(CommandHandler("token_stats", self.token_stats_command))  # Команда статистики токенов
         
         # Регистрация обработчиков сообщений
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
