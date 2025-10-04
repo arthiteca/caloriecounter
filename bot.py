@@ -14,6 +14,8 @@ from telegram.constants import ParseMode
 import config
 from database import Database
 from openai_service import OpenAIService
+from payment_buttons import PaymentButtons, PaymentMessages
+from payment_handler import PaymentHandler
 
 # Настройка логирования
 logging.basicConfig(
@@ -38,6 +40,7 @@ class CalorieCounterBot:
             model=config.OPENAI_MODEL,
             vision_model=config.OPENAI_VISION_MODEL
         )
+        self.payment_handler = PaymentHandler(self.db)
     
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /start"""
@@ -106,6 +109,7 @@ class CalorieCounterBot:
 <b>Команды:</b>
 /start - Начать работу с ботом
 /help - Показать это сообщение
+/payment - 💎 Купить ключ доступа
 /activate - Активировать ключ доступа
 /key_info - Информация о вашем ключе
 /stats - Статистика за сегодня
@@ -139,6 +143,28 @@ class CalorieCounterBot:
 Я постараюсь дать максимально точную оценку! 💪"""
         
         await update.message.reply_text(help_text, parse_mode=ParseMode.HTML)
+    
+    async def payment_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик команды /payment - меню оплаты"""
+        user_id = update.effective_user.id
+        
+        # Проверяем, не активирован ли уже ключ
+        access_info = await self.db.check_user_access(user_id)
+        if access_info['has_access'] or access_info.get('key_type'):
+            await update.message.reply_text(
+                f"✅ У вас уже активирован ключ!\n\n"
+                f"📊 {access_info['message']}\n\n"
+                f"Используйте /key_info для подробной информации.",
+                parse_mode=ParseMode.HTML
+            )
+            return
+        
+        # Показываем меню оплаты с кнопками
+        await update.message.reply_text(
+            PaymentMessages.get_payment_menu_text(),
+            reply_markup=PaymentButtons.get_payment_menu(),
+            parse_mode=ParseMode.HTML
+        )
     
     async def activate_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /activate - активация ключа доступа"""
@@ -226,6 +252,10 @@ class CalorieCounterBot:
                 info_message += "\n<i>Made by AI LAB</i>"
         
         await update.message.reply_text(info_message, parse_mode=ParseMode.HTML)
+    
+    async def payment_callback_handler(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
+        """Обработчик callback'ов от кнопок оплаты"""
+        await self.payment_handler.handle_payment_callback(update, context)
     
     async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /stats - показывает статистику за день"""
@@ -566,6 +596,7 @@ class CalorieCounterBot:
         # Регистрация обработчиков команд
         application.add_handler(CommandHandler("start", self.start_command))
         application.add_handler(CommandHandler("help", self.help_command))
+        application.add_handler(CommandHandler("payment", self.payment_command))  # Команда оплаты
         application.add_handler(CommandHandler("activate", self.activate_command))
         application.add_handler(CommandHandler("key_info", self.key_info_command))
         application.add_handler(CommandHandler("stats", self.stats_command))
@@ -577,6 +608,10 @@ class CalorieCounterBot:
         application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, self.handle_text))
         application.add_handler(MessageHandler(filters.PHOTO, self.handle_photo))
         application.add_handler(MessageHandler(filters.VOICE | filters.AUDIO, self.handle_voice_audio))
+        
+        # Регистрация обработчика callback'ов для кнопок оплаты
+        from telegram.ext import CallbackQueryHandler
+        application.add_handler(CallbackQueryHandler(self.payment_callback_handler))
         
         # Регистрация обработчика ошибок
         application.add_error_handler(self.error_handler)

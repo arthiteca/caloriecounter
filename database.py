@@ -82,6 +82,23 @@ class Database:
                 )
             """)
             
+            # Таблица платежей СБП
+            await db.execute("""
+                CREATE TABLE IF NOT EXISTS sbp_payments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    user_id INTEGER NOT NULL,
+                    payment_id TEXT UNIQUE NOT NULL,
+                    amount REAL NOT NULL,
+                    description TEXT,
+                    payment_url TEXT,
+                    qr_code TEXT,
+                    status TEXT DEFAULT 'pending',
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    paid_at TIMESTAMP,
+                    FOREIGN KEY (user_id) REFERENCES users(user_id)
+                )
+            """)
+            
             await db.commit()
             logger.info("База данных инициализирована")
     
@@ -331,3 +348,24 @@ class Database:
             return access_info
         
         return access_info
+    
+    async def add_sbp_payment(self, user_id: int, payment_id: str, amount: float, 
+                            description: str, payment_url: str = None, qr_code: str = None):
+        """Добавление платежа СБП"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute("""
+                INSERT INTO sbp_payments (user_id, payment_id, amount, description, payment_url, qr_code)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (user_id, payment_id, amount, description, payment_url, qr_code))
+            await db.commit()
+            logger.info(f"Платеж СБП добавлен: {payment_id} для пользователя {user_id}")
+    
+    async def get_sbp_payment(self, payment_id: str) -> Optional[Dict]:
+        """Получение платежа СБП по ID"""
+        async with aiosqlite.connect(self.db_path) as db:
+            db.row_factory = aiosqlite.Row
+            async with db.execute("""
+                SELECT * FROM sbp_payments WHERE payment_id = ?
+            """, (payment_id,)) as cursor:
+                row = await cursor.fetchone()
+                return dict(row) if row else None
