@@ -61,8 +61,7 @@ class CalorieCounterBot:
 • 📊 Отслеживать дневную норму калорий
 • 💡 Давать рекомендации по питанию
 
-🔐 <b>Для начала работы активируйте ключ доступа:</b>
-Используйте команду /activate и введите ваш ключ.
+🔐 <b>Для начала работы нужен ключ доступа</b>
 
 💎 <b>Покупка ключей:</b> @unrealartur
 📞 <b>Поддержка:</b> @unrealartur
@@ -96,9 +95,18 @@ class CalorieCounterBot:
 
 Давай начнём! Отправь мне фото своего блюда! 📸"""
         
+        # Создаем кнопки в зависимости от статуса пользователя
+        if not access_info.get('has_access') and not access_info.get('key_type'):
+            # Пользователь без ключа - показываем кнопки оплаты
+            reply_markup = PaymentButtons.get_payment_menu()
+        else:
+            # Пользователь с ключом - показываем основные кнопки
+            reply_markup = None
+        
         await update.message.reply_text(
             welcome_message,
-            parse_mode=ParseMode.HTML
+            parse_mode=ParseMode.HTML,
+            reply_markup=reply_markup
         )
         logger.info(f"Новый пользователь: {user.id} ({user.username})")
     
@@ -142,26 +150,43 @@ class CalorieCounterBot:
 
 Я постараюсь дать максимально точную оценку! 💪"""
         
-        await update.message.reply_text(help_text, parse_mode=ParseMode.HTML)
+        # Добавляем кнопки в помощь
+        reply_markup = PaymentButtons.get_payment_menu()
+        
+        await update.message.reply_text(
+            help_text, 
+            parse_mode=ParseMode.HTML,
+            reply_markup=reply_markup
+        )
     
     async def payment_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Обработчик команды /payment - меню оплаты"""
         user_id = update.effective_user.id
         
-        # Проверяем, не активирован ли уже ключ
+        # Проверяем текущий статус ключа
         access_info = await self.db.check_user_access(user_id)
-        if access_info['has_access'] or access_info.get('key_type'):
-            await update.message.reply_text(
-                f"✅ У вас уже активирован ключ!\n\n"
-                f"📊 {access_info['message']}\n\n"
-                f"Используйте /key_info для подробной информации.",
-                parse_mode=ParseMode.HTML
-            )
-            return
         
-        # Показываем меню оплаты с кнопками
+        # Показываем информацию о текущем ключе, если есть
+        if access_info.get('has_access') or access_info.get('key_type'):
+            current_key_info = f"✅ <b>Текущий ключ:</b> {access_info['message']}\n\n"
+        else:
+            current_key_info = "🔒 <b>У вас нет активного ключа</b>\n\n"
+        
+        # Показываем меню оплаты с кнопками (всегда доступно)
+        message_text = f"""{current_key_info}💎 <b>Меню оплаты</b>
+
+Выберите действие:
+
+🔐 <b>Купить ключ доступа</b> - приобрести доступ к боту
+📊 <b>Информация о ключе</b> - посмотреть текущий статус
+📈 <b>Статистика</b> - ваша статистика использования
+❓ <b>Помощь</b> - помощь по оплате
+
+💡 <b>Способы оплаты:</b> СБП, банковские карты
+📞 <b>Поддержка:</b> @unrealartur"""
+        
         await update.message.reply_text(
-            PaymentMessages.get_payment_menu_text(),
+            message_text,
             reply_markup=PaymentButtons.get_payment_menu(),
             parse_mode=ParseMode.HTML
         )
@@ -376,8 +401,9 @@ class CalorieCounterBot:
         if not access_info.get('has_access') and not access_info.get('key_type'):
             await update.message.reply_text(
                 "🔒 <b>Для использования бота необходимо активировать ключ доступа.</b>\n\n"
-                "Используйте команду /activate и введите ваш ключ.",
-                parse_mode=ParseMode.HTML
+                "Выберите способ получения ключа:",
+                parse_mode=ParseMode.HTML,
+                reply_markup=PaymentButtons.get_payment_menu()
             )
             return
         
@@ -407,8 +433,9 @@ class CalorieCounterBot:
         if not access_info.get('has_access') and not access_info.get('key_type'):
             await update.message.reply_text(
                 "🔒 <b>Для использования бота необходимо активировать ключ доступа.</b>\n\n"
-                "Используйте команду /activate и введите ваш ключ.",
-                parse_mode=ParseMode.HTML
+                "Выберите способ получения ключа:",
+                parse_mode=ParseMode.HTML,
+                reply_markup=PaymentButtons.get_payment_menu()
             )
             return
         
@@ -432,8 +459,9 @@ class CalorieCounterBot:
                 # Ключ не активирован вообще
                 await update.message.reply_text(
                     "🔒 Для использования бота необходимо активировать ключ доступа.\n\n"
-                    "Используйте команду /activate и введите ваш ключ.",
-                    parse_mode=ParseMode.HTML
+                    "Выберите способ получения ключа:",
+                    parse_mode=ParseMode.HTML,
+                    reply_markup=PaymentButtons.get_payment_menu()
                 )
             else:
                 # Лимит исчерпан

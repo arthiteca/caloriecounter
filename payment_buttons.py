@@ -87,9 +87,9 @@ class PaymentMessages:
     """Класс для сообщений оплаты"""
     
     @staticmethod
-    def get_payment_menu_text():
+    def get_payment_menu_text(current_key_info=""):
         """Текст главного меню оплаты"""
-        return """💎 <b>Меню оплаты</b>
+        return f"""{current_key_info}💎 <b>Меню оплаты</b>
 
 Выберите действие:
 

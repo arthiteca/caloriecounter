@@ -31,6 +31,12 @@ class PaymentHandler:
         
         if data == "buy_key":
             await self._handle_buy_key(query, context)
+        elif data == "key_info":
+            await self._handle_key_info(query, context)
+        elif data == "stats":
+            await self._handle_stats(query, context)
+        elif data == "help":
+            await self._handle_help(query, context)
         elif data == "select_tariff":
             await self._handle_select_tariff(query, context)
         elif data.startswith("tariff_"):
@@ -59,22 +65,197 @@ class PaymentHandler:
     
     async def _handle_buy_key(self, query, context):
         """Обработка нажатия 'Купить ключ'"""
-        # Проверяем, не активирован ли уже ключ
+        # Проверяем текущий статус ключа
         access_info = await self.db.check_user_access(query.from_user.id)
-        if access_info['has_access'] or access_info.get('key_type'):
-            await query.edit_message_text(
-                f"✅ У вас уже активирован ключ!\n\n"
-                f"📊 {access_info['message']}\n\n"
-                f"Используйте кнопку 'Информация о ключе' для подробной информации.",
-                reply_markup=PaymentButtons.get_back_button(),
-                parse_mode=ParseMode.HTML
-            )
-            return
         
-        # Показываем выбор тарифа
+        # Показываем информацию о текущем ключе, если есть
+        if access_info.get('has_access') or access_info.get('key_type'):
+            current_key_info = f"✅ <b>Текущий ключ:</b> {access_info['message']}\n\n"
+        else:
+            current_key_info = "🔒 <b>У вас нет активного ключа</b>\n\n"
+        
+        # Показываем выбор тарифа (всегда доступно)
+        message_text = f"""{current_key_info}💎 <b>Выберите тариф</b>
+
+🔐 <b>Ограниченные ключи:</b>
+• 10 анализов - 100 ₽
+• 50 анализов - 400 ₽  
+• 100 анализов - 700 ₽
+
+🔓 <b>Безлимитный ключ:</b>
+• Неограниченно - 1500 ₽
+
+💳 <b>Оплата через СБП</b>
+⚡ <b>Мгновенная активация</b>
+🔒 <b>Безопасно и надежно</b>"""
+        
         await query.edit_message_text(
-            PaymentMessages.get_tariff_selection_text(),
+            message_text,
             reply_markup=PaymentButtons.get_tariff_buttons(),
+            parse_mode=ParseMode.HTML
+        )
+    
+    async def _handle_key_info(self, query, context):
+        """Обработка нажатия 'Информация о ключе'"""
+        user_id = query.from_user.id
+        access_info = await self.db.check_user_access(user_id)
+        
+        if not access_info.get('has_access') and not access_info.get('key_type'):
+            # Нет ключа
+            message_text = """❌ <b>У вас нет активированного ключа</b>
+
+🔐 <b>Для использования бота необходимо активировать ключ доступа</b>
+
+💎 <b>Выберите способ получения ключа:</b>"""
+            reply_markup = PaymentButtons.get_payment_menu()
+        else:
+            # Есть ключ - показываем информацию
+            key_type = access_info.get('key_type', 'unknown')
+            
+            if key_type == 'unlimited':
+                message_text = f"""🔓 <b>Информация о вашем ключе</b>
+
+<b>Тип:</b> Безлимитный
+<b>Статус:</b> ✅ Активен
+
+<b>Доступ:</b>
+• ✅ Анализ фотографий: Безлимитно
+
+Вы можете использовать бота без ограничений! 🎉
+
+📷 <b>Напоминание:</b> Бот работает только с фотографиями!"""
+            else:  # limited
+                images_used = access_info.get('images_used', 0)
+                images_left = access_info.get('images_left', 0)
+                
+                status = "✅ Активен" if access_info['has_access'] else "❌ Лимит исчерпан"
+                
+                message_text = f"""🔐 <b>Информация о вашем ключе</b>
+
+<b>Тип:</b> Ограниченный
+<b>Статус:</b> {status}
+
+<b>Использование:</b>
+• Проанализировано фото: {images_used}
+• Осталось анализов: {images_left}
+
+<b>Доступ:</b>
+• {"✅" if images_left > 0 else "❌"} Анализ фотографий: {images_left} шт.
+
+📷 <b>Напоминание:</b> Бот работает только с фотографиями!"""
+                
+                if images_left <= 5 and images_left > 0:
+                    message_text += "\n\n⚠️ У вас осталось мало анализов!"
+                elif images_left == 0:
+                    message_text += "\n\n❌ Лимит анализов исчерпан."
+                    message_text += "\n\n💎 <b>Покупка нового ключа:</b> @unrealartur"
+                    message_text += "\n<i>Made by AI LAB</i>"
+            
+            reply_markup = PaymentButtons.get_payment_menu()
+        
+        await query.edit_message_text(
+            message_text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.HTML
+        )
+    
+    async def _handle_stats(self, query, context):
+        """Обработка нажатия 'Статистика'"""
+        user_id = query.from_user.id
+        access_info = await self.db.check_user_access(user_id)
+        
+        if not access_info.get('has_access') and not access_info.get('key_type'):
+            # Нет ключа
+            message_text = """📊 <b>Статистика недоступна</b>
+
+🔐 <b>Для просмотра статистики необходимо активировать ключ доступа</b>
+
+💎 <b>Выберите способ получения ключа:</b>"""
+            reply_markup = PaymentButtons.get_payment_menu()
+        else:
+            # Есть ключ - показываем статистику
+            key_type = access_info.get('key_type', 'unknown')
+            images_used = access_info.get('images_used', 0)
+            images_left = access_info.get('images_left', 0)
+            
+            if key_type == 'unlimited':
+                message_text = f"""📊 <b>Ваша статистика</b>
+
+🔓 <b>Тип ключа:</b> Безлимитный
+📷 <b>Проанализировано фото:</b> {images_used}
+♾️ <b>Осталось анализов:</b> Безлимитно
+
+🎉 <b>Вы можете использовать бота без ограничений!</b>
+
+📷 <b>Напоминание:</b> Бот работает только с фотографиями!"""
+            else:  # limited
+                total_limit = images_used + images_left
+                usage_percent = (images_used / total_limit * 100) if total_limit > 0 else 0
+                
+                message_text = f"""📊 <b>Ваша статистика</b>
+
+🔐 <b>Тип ключа:</b> Ограниченный
+📷 <b>Проанализировано фото:</b> {images_used}
+📈 <b>Осталось анализов:</b> {images_left}
+📊 <b>Использовано:</b> {usage_percent:.1f}%
+
+<b>Прогресс:</b>
+{'█' * int(usage_percent // 10)}{'░' * (10 - int(usage_percent // 10))} {usage_percent:.1f}%
+
+📷 <b>Напоминание:</b> Бот работает только с фотографиями!"""
+                
+                if images_left <= 5 and images_left > 0:
+                    message_text += "\n\n⚠️ У вас осталось мало анализов!"
+                elif images_left == 0:
+                    message_text += "\n\n❌ Лимит анализов исчерпан."
+                    message_text += "\n\n💎 <b>Покупка нового ключа:</b> @unrealartur"
+                    message_text += "\n<i>Made by AI LAB</i>"
+            
+            reply_markup = PaymentButtons.get_payment_menu()
+        
+        await query.edit_message_text(
+            message_text,
+            reply_markup=reply_markup,
+            parse_mode=ParseMode.HTML
+        )
+    
+    async def _handle_help(self, query, context):
+        """Обработка нажатия 'Помощь'"""
+        message_text = """❓ <b>Помощь по оплате</b>
+
+<b>Как купить ключ:</b>
+1. Нажмите "💎 Купить ключ доступа"
+2. Выберите подходящий тариф
+3. Подтвердите оплату
+4. Выберите способ оплаты (QR-код или ссылка)
+5. Оплатите через СБП
+6. Ключ активируется автоматически
+
+<b>Тарифы:</b>
+🔐 <b>Ограниченные:</b> 10/50/100 анализов
+🔓 <b>Безлимитный:</b> неограниченно
+
+<b>Способы оплаты:</b>
+💳 СБП (Система быстрых платежей)
+💳 Банковские карты
+
+<b>После оплаты:</b>
+✅ Ключ активируется мгновенно
+📱 Вы получите уведомление
+🎉 Можете сразу использовать бота
+
+<b>Поддержка:</b>
+📞 @unrealartur - помощь по оплате
+💬 @unrealartur - техническая поддержка
+
+<b>Безопасность:</b>
+🔒 Все платежи защищены
+🛡️ Данные не передаются третьим лицам
+⚡ Мгновенная активация после оплаты"""
+        
+        await query.edit_message_text(
+            message_text,
+            reply_markup=PaymentButtons.get_payment_menu(),
             parse_mode=ParseMode.HTML
         )
     
