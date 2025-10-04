@@ -44,7 +44,8 @@ class TokenTracker:
             self.requests_count += 1
             
             # Логируем информацию
-            logger.info(f"OpenAI запрос - Токены: {prompt_tokens} входных + {completion_tokens} выходных = {total_tokens} всего. Стоимость: ${request_cost:.6f}")
+            cost_rub = request_cost * 100.0  # Курс 100 рублей за доллар
+            logger.info(f"OpenAI запрос - Токены: {prompt_tokens} входных + {completion_tokens} выходных = {total_tokens} всего. Стоимость: ${request_cost:.6f} ({cost_rub:.2f} ₽)")
             
             return {
                 "prompt_tokens": prompt_tokens,
@@ -60,12 +61,17 @@ class TokenTracker:
     
     def get_stats(self) -> Dict:
         """Получить статистику использования токенов"""
+        # Курс доллара к рублю
+        USD_TO_RUB_RATE = 100.0
+        
         return {
             "total_tokens_used": self.total_tokens_used,
             "total_cost": self.total_cost,
+            "total_cost_rub": self.total_cost * USD_TO_RUB_RATE,
             "requests_count": self.requests_count,
             "avg_tokens_per_request": self.total_tokens_used / self.requests_count if self.requests_count > 0 else 0,
-            "avg_cost_per_request": self.total_cost / self.requests_count if self.requests_count > 0 else 0
+            "avg_cost_per_request": self.total_cost / self.requests_count if self.requests_count > 0 else 0,
+            "avg_cost_per_request_rub": (self.total_cost / self.requests_count * USD_TO_RUB_RATE) if self.requests_count > 0 else 0
         }
     
     def reset(self):
