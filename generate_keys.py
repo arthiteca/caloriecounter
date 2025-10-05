@@ -71,6 +71,15 @@ async def main():
     print(f"📊 Статистика:")
     print(f"   • Безлимитных ключей: {len(keys_data['unlimited_keys'])}")
     print(f"   • Ограниченных ключей: {len(keys_data['limited_keys'])}")
+    
+    # Подсчет по типам ограниченных ключей
+    limits = {}
+    for key_info in keys_data['limited_keys']:
+        limit = key_info['limit']
+        limits[limit] = limits.get(limit, 0) + 1
+    
+    for limit in sorted(limits.keys(), reverse=True):
+        print(f"     - {limits[limit]} ключей на {limit} анализов")
     print()
     print(f"📁 Файлы:")
     print(f"   • Ключи сохранены в: access_keys.txt")

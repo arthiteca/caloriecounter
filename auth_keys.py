@@ -50,8 +50,10 @@ class AuthKeyManager:
 def generate_default_keys() -> Dict:
     """
     Генерация набора ключей по умолчанию:
-    - 10 ключей с лимитом 20 изображений
-    - 1 безлимитный ключ
+    - 5 безлимитных ключей
+    - 20 ключей с лимитом 100 изображений
+    - 20 ключей с лимитом 50 изображений
+    - 20 ключей с лимитом 10 изображений
     
     Returns:
         Словарь с типами ключей
@@ -61,15 +63,26 @@ def generate_default_keys() -> Dict:
         'unlimited_keys': []
     }
     
-    # Генерация 10 ключей с лимитом
-    limited = AuthKeyManager.generate_keys(count=10, limit=20)
-    result['limited_keys'] = limited
-    
-    # Генерация 1 безлимитного ключа
-    unlimited = AuthKeyManager.generate_keys(count=1, limit=None)
+    # Генерация 5 безлимитных ключей
+    unlimited = AuthKeyManager.generate_keys(count=5, limit=None)
     result['unlimited_keys'] = unlimited
     
-    logger.info(f"Сгенерировано {len(limited)} ограниченных и {len(unlimited)} безлимитных ключей")
+    # Генерация 20 ключей с лимитом 100 изображений
+    limited_100 = AuthKeyManager.generate_keys(count=20, limit=100)
+    result['limited_keys'].extend(limited_100)
+    
+    # Генерация 20 ключей с лимитом 50 изображений
+    limited_50 = AuthKeyManager.generate_keys(count=20, limit=50)
+    result['limited_keys'].extend(limited_50)
+    
+    # Генерация 20 ключей с лимитом 10 изображений
+    limited_10 = AuthKeyManager.generate_keys(count=20, limit=10)
+    result['limited_keys'].extend(limited_10)
+    
+    logger.info(f"Сгенерировано {len(result['limited_keys'])} ограниченных и {len(result['unlimited_keys'])} безлимитных ключей")
+    logger.info(f"  - 20 ключей на 100 анализов")
+    logger.info(f"  - 20 ключей на 50 анализов") 
+    logger.info(f"  - 20 ключей на 10 анализов")
     
     return result
 
@@ -100,15 +113,28 @@ def save_keys_to_file(keys_data: Dict, filename: str = 'access_keys.txt'):
         
         # Ограниченные ключи
         if keys_data['limited_keys']:
-            f.write("\n🔐 КЛЮЧИ С ЛИМИТОМ (20 анализов изображений каждый):\n")
+            f.write("\n🔐 КЛЮЧИ С ЛИМИТОМ:\n")
             f.write("-" * 70 + "\n")
-            for idx, key_info in enumerate(keys_data['limited_keys'], 1):
-                key = key_info['key']
-                formatted = AuthKeyManager.format_key_for_display(key)
+            
+            # Группируем ключи по лимитам
+            limits = {}
+            for key_info in keys_data['limited_keys']:
                 limit = key_info['limit']
-                f.write(f"{idx}. {key}\n")
-                f.write(f"   Формат: {formatted}\n")
-                f.write(f"   Лимит: {limit} изображений\n\n")
+                if limit not in limits:
+                    limits[limit] = []
+                limits[limit].append(key_info)
+            
+            # Выводим ключи по группам
+            for limit in sorted(limits.keys(), reverse=True):
+                keys_with_limit = limits[limit]
+                f.write(f"\n📊 КЛЮЧИ НА {limit} АНАЛИЗОВ ИЗОБРАЖЕНИЙ ({len(keys_with_limit)} шт.):\n")
+                f.write("-" * 50 + "\n")
+                for idx, key_info in enumerate(keys_with_limit, 1):
+                    key = key_info['key']
+                    formatted = AuthKeyManager.format_key_for_display(key)
+                    f.write(f"{idx}. {key}\n")
+                    f.write(f"   Формат: {formatted}\n")
+                    f.write(f"   Лимит: {limit} изображений\n\n")
         
         f.write("\n" + "=" * 70 + "\n")
         f.write("КАК ИСПОЛЬЗОВАТЬ:\n")
@@ -122,6 +148,7 @@ def save_keys_to_file(keys_data: Dict, filename: str = 'access_keys.txt'):
         f.write("• Ограниченные ключи имеют лимит только на АНАЛИЗ ИЗОБРАЖЕНИЙ\n")
         f.write("• Текстовые запросы не учитываются в лимите\n")
         f.write("• После активации ключ привязывается к вашему Telegram ID\n")
+        f.write("• Доступны ключи: 5 безлимитных, 20 на 100, 20 на 50, 20 на 10 анализов\n")
         f.write("=" * 70 + "\n")
     
     logger.info(f"Ключи сохранены в файл: {filename}")
@@ -139,3 +166,12 @@ if __name__ == "__main__":
     print("\n✅ Ключи успешно сгенерированы и сохранены в access_keys.txt")
     print(f"   • Безлимитных ключей: {len(keys['unlimited_keys'])}")
     print(f"   • Ограниченных ключей: {len(keys['limited_keys'])}")
+    
+    # Подсчет по типам ограниченных ключей
+    limits = {}
+    for key_info in keys['limited_keys']:
+        limit = key_info['limit']
+        limits[limit] = limits.get(limit, 0) + 1
+    
+    for limit in sorted(limits.keys(), reverse=True):
+        print(f"     - {limits[limit]} ключей на {limit} анализов")
